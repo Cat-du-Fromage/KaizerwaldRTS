@@ -43,11 +43,14 @@ protected:
 	UFUNCTION()
 	void OnBoxColliderBeginOverlap(UPrimitiveComponent* overlappedComponent, AActor* otherActor, UPrimitiveComponent* otherComp, int32 otherBodyIndex, bool bFromSweep, const FHitResult& sweepResult);
 	
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings")
 	FVector StartLocation;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings")
 	FRotator StartRotation;
+
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings")
+	bool IsEnabled; //BoxSelect (In Tuto)
 
 	UPROPERTY()
 	TArray<AActor*> ActorsInBox;
@@ -62,9 +65,6 @@ private:
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, meta = (AllowPrivateAccess = "true"))
 	UDecalComponent* DecalComponent;
 
-	UPROPERTY()
-	bool IsEnabled; //BoxSelect (In Tuto)
-
-	UPROPERTY()
+	UPROPERTY(VisibleAnywhere, Category="Settings")
 	ARTSPlayerController* PlayerController;
 };

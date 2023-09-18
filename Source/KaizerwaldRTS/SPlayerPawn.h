@@ -66,11 +66,11 @@ protected:
 	ASelectionBox* SelectionBox;
 
 	//Move to SelectionBox?
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings|Mouse")
 	bool BoxSelectionEnabled; //BoxSelected(in tuto)
 
 	//Move to SelectionBox?
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings|Mouse")
 	FVector LeftMouseHitLocation; //In Unity was -> MouseStart
 	
 private:

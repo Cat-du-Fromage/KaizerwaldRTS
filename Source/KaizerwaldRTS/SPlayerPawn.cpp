@@ -5,6 +5,7 @@
 
 #include "EnhancedInputSubsystems.h"
 #include "RTSPlayerController.h"
+#include "SelectionBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -58,6 +59,7 @@ void ASPlayerPawn::BeginPlay()
 
 	// Assign Player Controller Reference
 	RTSPlayerController = Cast<ARTSPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(),0));
+	CreateSelectionBox();
 }
 
 
@@ -269,13 +271,22 @@ void ASPlayerPawn::MouseLeftPressed()
 	if(!RTSPlayerController) return;
 	BoxSelectionEnabled = false;
 	RTSPlayerController->HandleSelection(nullptr);
-	
+	LeftMouseHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
 }
 
 void ASPlayerPawn::MouseLeftReleased()
 {
 	if(!RTSPlayerController) return;
-	RTSPlayerController->HandleSelection(GetSelectedObject());
+	//RTSPlayerController->HandleSelection(GetSelectedObject());
+	if(BoxSelectionEnabled && SelectionBox)
+	{
+		SelectionBox->End();
+		BoxSelectionEnabled = false;
+	}
+	else
+	{
+		RTSPlayerController->HandleSelection(GetSelectedObject());
+	}
 }
 
 void ASPlayerPawn::LeftMouseInputHeld(float axisValue)
@@ -284,7 +295,7 @@ void ASPlayerPawn::LeftMouseInputHeld(float axisValue)
 	if(RTSPlayerController->GetInputKeyTimeDown(EKeys::LeftMouseButton) < LeftMouseHoldThreshold) return;
 	if(!BoxSelectionEnabled && SelectionBox)
 	{
-		//SelectionBox->Start(LeftMouseHitLocation, TargetRotation);
+		SelectionBox->Start(LeftMouseHitLocation, TargetRotation);
 		BoxSelectionEnabled = true;
 	}
 }
@@ -297,19 +308,32 @@ void ASPlayerPawn::MouseRightReleased()
 {
 	if(!RTSPlayerController) return;
 	//Box selection active?
+	/*
 	if(BoxSelectionEnabled && SelectionBox)
 	{
-		//SelectionBox->End();
+		SelectionBox->End();
 		BoxSelectionEnabled = false;
 	}
 	else
 	{
 		RTSPlayerController->HandleSelection(GetSelectedObject());
 	}
-	
+	*/
 }
 
 void ASPlayerPawn::CreateSelectionBox()
 {
+	if(!SelectionBoxClass) return;
+	if(UWorld* worldContext = GetWorld())
+	{
+		FActorSpawnParameters spawnParams;
+		spawnParams.Instigator = this;
+		spawnParams.Owner = this;
+		SelectionBox = worldContext->SpawnActor<ASelectionBox>(SelectionBoxClass, FVector::ZeroVector, FRotator::ZeroRotator, spawnParams);
+		if(SelectionBox)
+		{
+			SelectionBox->SetOwner(this);
+		}
+	}
 }
 

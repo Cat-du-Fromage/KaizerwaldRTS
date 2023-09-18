@@ -7,6 +7,7 @@
 #include "RTSPlayerController.h"
 #include "Components/BoxComponent.h"
 #include "Components/DecalComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 
 // Sets default values
@@ -36,13 +37,12 @@ ASelectionBox::ASelectionBox()
 void ASelectionBox::BeginPlay()
 {
 	Super::BeginPlay();
-
 	SetActorEnableCollision(false);
-	
 	if(DecalComponent)
 	{
 		DecalComponent->SetVisibility(false);
 	}
+	PlayerController = Cast<ARTSPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(),0));
 }
 
 // Called every frame
@@ -73,7 +73,7 @@ void ASelectionBox::Adjust() const
 	BoxCollider->SetBoxExtent(newExtend);
 
 	//we have to change the order of axis because the box is rotated 90° so Z is now forward, y right, x down etc..
-	const FVector decalSize = FVector(newExtend.Z,newExtend.Y,newExtend.X);
+	FVector decalSize = FVector(newExtend.Z,newExtend.Y,newExtend.X);
 	DecalComponent->DecalSize = decalSize;
 }
 
@@ -97,7 +97,8 @@ void ASelectionBox::Manage()
 		const bool zInBounds = localActorCenter.Z >= -localExtents.Z && localActorCenter.Z <= localExtents.Z;
 		if(xInBounds && yInBounds && zInBounds)
 		{
-			CenterInBox.AddUnique(currentActor);
+			if(CenterInBox.Contains(currentActor)) continue;
+			CenterInBox.Add(currentActor);
 			HandleHighlight(currentActor, true);
 		}
 		else
