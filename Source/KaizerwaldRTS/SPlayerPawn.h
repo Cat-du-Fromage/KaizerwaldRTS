@@ -6,6 +6,7 @@
 #include "GameFramework/Pawn.h"
 #include "SPlayerPawn.generated.h"
 
+class ASelectionBox;
 class ARTSPlayerController;
 class UInputMappingContext;
 //do this instead of include when you only need to declare pointers, references,
@@ -28,7 +29,7 @@ public:
 	
 protected:
 	UPROPERTY()
-	ARTSPlayerController* RTSPlayerController;
+	ARTSPlayerController* RTSPlayerController; //SPlayer (In Tutorial)
 	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
 	float MoveSpeed = 20.0f;
@@ -53,6 +54,24 @@ protected:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
 	float MaxZoom = 4000.0f;
+
+	/** Box selection **/
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Mouse")
+	float LeftMouseHoldThreshold = 0.15f;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Mouse")
+	TSubclassOf<ASelectionBox> SelectionBoxClass;
+
+	UPROPERTY()
+	ASelectionBox* SelectionBox;
+
+	//Move to SelectionBox?
+	UPROPERTY()
+	bool BoxSelectionEnabled; //BoxSelected(in tuto)
+
+	//Move to SelectionBox?
+	UPROPERTY()
+	FVector LeftMouseHitLocation; //In Unity was -> MouseStart
 	
 private:
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, meta = (AllowPrivateAccess = "true"))
@@ -141,11 +160,17 @@ protected:
 	void MouseLeftReleased();
 
 	UFUNCTION()
+	void LeftMouseInputHeld(float axisValue);
+
+	UFUNCTION()
 	void MouseRightPressed();
 
 	UFUNCTION()
 	void MouseRightReleased();
 
+	//Move so selection box?
+	UFUNCTION()
+	void CreateSelectionBox();
 	
 	//ENHANCED INPUTS
 	//void OnMovement();

@@ -22,7 +22,11 @@ public:
 
 	UFUNCTION()
 	void HandleSelection(AActor* actorToSelect);
+	void HandleSelection(TArray<AActor*> actorsToSelect);
 
+	UFUNCTION()
+	FVector GetMousePositionOnTerrain() const;
+	
 protected:
 
 	UPROPERTY()
@@ -38,6 +42,9 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSelect(AActor* actorToSelect);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSelectGroup(const TArray<AActor*>& actorsToSelect);
 
 	UFUNCTION(Server, Reliable)
 	void ServerDeSelect(AActor* actorToDeSelect);

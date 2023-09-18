@@ -93,7 +93,8 @@ void ASPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAxis(TEXT("Zoom"), this, &ASPlayerPawn::Zoom);
 	PlayerInputComponent->BindAxis(TEXT("RotateHorizontal"), this, &ASPlayerPawn::RotateHorizontal);
 	PlayerInputComponent->BindAxis(TEXT("RotateVertical"), this, &ASPlayerPawn::RotateVertical);
-
+	PlayerInputComponent->BindAxis(TEXT("MouseLeft"), this, &ASPlayerPawn::LeftMouseInputHeld);
+	
 	PlayerInputComponent->BindAction(TEXT("RotateRight"),IE_Pressed,this, &ASPlayerPawn::RotateRight);
 	PlayerInputComponent->BindAction(TEXT("RotateLeft"),IE_Pressed,this, &ASPlayerPawn::RotateLeft);
 	PlayerInputComponent->BindAction(TEXT("Rotate"),IE_Pressed,this, &ASPlayerPawn::EnableRotate);
@@ -111,12 +112,12 @@ void ASPlayerPawn::GetTerrainPosition(FVector& terrainPosition)
 {
 	if(UWorld* worldContext = GetWorld())
 	{
-		FHitResult hit;
-		FCollisionQueryParams collisionParams;
 		const FVector offset = FVector(0,0,10000);//Z is the UP vector!!
 		FVector traceOrigin = terrainPosition + offset;
 		FVector traceEnd = terrainPosition - offset;
-		if(worldContext->LineTraceSingleByChannel(hit, traceOrigin, traceEnd, ECC_Visibility, collisionParams))
+		
+		FCollisionQueryParams collisionParams;
+		if(FHitResult hit; worldContext->LineTraceSingleByChannel(hit, traceOrigin, traceEnd, ECC_Visibility, collisionParams))
 		{
 			terrainPosition = hit.ImpactPoint;
 		}
@@ -244,15 +245,20 @@ AActor* ASPlayerPawn::GetSelectedObject()
 	{
 		FVector worldLocation, worldDirection;
 		RTSPlayerController->DeprojectMousePositionToWorld(worldLocation, worldDirection);
-		FVector end = worldLocation + worldDirection * 1000000.0f;
+		
 		FCollisionQueryParams params;
 		params.AddIgnoredActor(this);
+
+		FVector end = worldLocation + worldDirection * 1000000.0f;
 		if(FHitResult hit; world->LineTraceSingleByChannel(hit, worldLocation, end, ECC_Visibility, params))
 		{
+			return hit.GetActor();
+			/*
 			if(AActor* hitActor = hit.GetActor())
 			{
 				return hitActor;
 			}
+			*/
 		}
 	}
 	return nullptr;
@@ -260,6 +266,9 @@ AActor* ASPlayerPawn::GetSelectedObject()
 
 void ASPlayerPawn::MouseLeftPressed()
 {
+	if(!RTSPlayerController) return;
+	BoxSelectionEnabled = false;
+	RTSPlayerController->HandleSelection(nullptr);
 	
 }
 
@@ -269,11 +278,38 @@ void ASPlayerPawn::MouseLeftReleased()
 	RTSPlayerController->HandleSelection(GetSelectedObject());
 }
 
+void ASPlayerPawn::LeftMouseInputHeld(float axisValue)
+{
+	if(!RTSPlayerController || FMath::IsNearlyEqual(axisValue, 0.0f)) return;
+	if(RTSPlayerController->GetInputKeyTimeDown(EKeys::LeftMouseButton) < LeftMouseHoldThreshold) return;
+	if(!BoxSelectionEnabled && SelectionBox)
+	{
+		//SelectionBox->Start(LeftMouseHitLocation, TargetRotation);
+		BoxSelectionEnabled = true;
+	}
+}
+
 void ASPlayerPawn::MouseRightPressed()
 {
 }
 
 void ASPlayerPawn::MouseRightReleased()
+{
+	if(!RTSPlayerController) return;
+	//Box selection active?
+	if(BoxSelectionEnabled && SelectionBox)
+	{
+		//SelectionBox->End();
+		BoxSelectionEnabled = false;
+	}
+	else
+	{
+		RTSPlayerController->HandleSelection(GetSelectedObject());
+	}
+	
+}
+
+void ASPlayerPawn::CreateSelectionBox()
 {
 }
 

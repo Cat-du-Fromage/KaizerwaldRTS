@@ -38,8 +38,9 @@ void ARTSPlayerController::BeginPlay()
 
 void ARTSPlayerController::HandleSelection(AActor* actorToSelect)
 {
-	if(ISelectable* selectable = Cast<ISelectable>(actorToSelect))
+	if(Cast<ISelectable>(actorToSelect))
 	{
+		/*
 		if(actorToSelect && ActorSelected(actorToSelect))
 		{
 			ServerDeSelect(actorToSelect);
@@ -48,12 +49,34 @@ void ARTSPlayerController::HandleSelection(AActor* actorToSelect)
 		{
 			ServerSelect(actorToSelect);
 		}
-		//ActorSelected(actorToSelect) ? ServerDeSelect(actorToSelect) : ServerSelect(actorToSelect);
+		*/
+		ActorSelected(actorToSelect) ? ServerDeSelect(actorToSelect) : ServerSelect(actorToSelect);
 	}
 	else
 	{
 		ServerClearSelected();
 	}
+}
+
+void ARTSPlayerController::HandleSelection(TArray<AActor*> actorsToSelect)
+{
+	ServerSelectGroup(actorsToSelect);
+}
+
+FVector ARTSPlayerController::GetMousePositionOnTerrain() const
+{
+	FVector worldLocation, worldDirection;
+	DeprojectMousePositionToWorld(worldLocation, worldDirection);
+	
+	const FVector end = worldLocation + worldDirection * 1000000.0f;
+	if(FHitResult hit; GetWorld()->LineTraceSingleByChannel(hit, worldLocation, end, ECC_GameTraceChannel1))
+	{
+		if(hit.bBlockingHit)
+		{
+			return hit.Location;
+		}
+	}
+	return FVector::ZeroVector;
 }
 
 bool ARTSPlayerController::ActorSelected(AActor* actorToCheck) const
@@ -70,6 +93,24 @@ void ARTSPlayerController::ServerSelect_Implementation(AActor* actorToSelect)
 		Selections.Add(actorToSelect);
 		OnRepSelected();
 	}
+}
+
+void ARTSPlayerController::ServerSelectGroup_Implementation(const TArray<AActor*>& actorsToSelect)
+{
+	ServerClearSelected();
+	TArray<AActor*> validActors;
+	for(AActor* actorToSelect : actorsToSelect)
+	{
+		if(!actorToSelect) continue;
+		if(ISelectable* selectable = Cast<ISelectable>(actorToSelect))
+		{
+			validActors.Add(actorToSelect);
+			selectable->Select();
+		}
+	}
+	Selections.Append(validActors);
+	OnRepSelected();
+	validActors.Empty();
 }
 
 void ARTSPlayerController::ServerDeSelect_Implementation(AActor* actorToDeSelect)
