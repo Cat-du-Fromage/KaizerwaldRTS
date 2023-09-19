@@ -3,12 +3,14 @@
 
 #include "SPlayerPawn.h"
 
+#include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "RTSPlayerController.h"
 #include "SelectionBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Input/PlayerInputActions.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 
@@ -40,6 +42,17 @@ ASPlayerPawn::ASPlayerPawn()
 	//└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComponent"));
 	CameraComponent->SetupAttachment(SpringArmComponent);
+	/*
+	MoveSpeed = 20.0f;
+	EdgeScrollSpeed = 3.0f;
+	RotateSpeed = 2.0f;
+	RotatePitchMin = 10.0f;
+	RotatePitchMax = 80.0f;
+	ZoomSpeed = 200.0f;
+	MinZoom = 500.0f;
+	MaxZoom = 4000.0f;
+	Smoothing = 2.0f
+	*/
 }
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
 //║										         ◆◆◆◆◆◆ Unreal Events ◆◆◆◆◆◆		                                   ║
@@ -62,8 +75,6 @@ void ASPlayerPawn::BeginPlay()
 	CreateSelectionBox();
 }
 
-
-
 // Called every frame
 void ASPlayerPawn::Tick(float DeltaTime)
 {
@@ -73,14 +84,14 @@ void ASPlayerPawn::Tick(float DeltaTime)
 	EdgeScroll();
 	
 	//move camera in the desired location
-	const FVector interpolatedLocation = UKismetMathLibrary::VInterpTo(GetActorLocation(), TargetLocation, DeltaTime, MoveSpeed);
+	const FVector interpolatedLocation = UKismetMathLibrary::VInterpTo(GetActorLocation(), TargetLocation, DeltaTime, Smoothing);
 	SetActorLocation(interpolatedLocation);
 
 	//Zoom camera in the desired direction
-	const float interpolatedZoom = UKismetMathLibrary::FInterpTo(SpringArmComponent->TargetArmLength, TargetZoom, DeltaTime, MoveSpeed);
+	const float interpolatedZoom = UKismetMathLibrary::FInterpTo(SpringArmComponent->TargetArmLength, TargetZoom, DeltaTime, Smoothing);
 	SpringArmComponent->TargetArmLength = interpolatedZoom;
 
-	const FRotator interpolatedRotation = UKismetMathLibrary::RInterpTo(SpringArmComponent->GetRelativeRotation(), TargetRotation, DeltaTime, RotateSpeed);
+	const FRotator interpolatedRotation = UKismetMathLibrary::RInterpTo(SpringArmComponent->GetRelativeRotation(), TargetRotation, DeltaTime, Smoothing);
 	SpringArmComponent->SetRelativeRotation(interpolatedRotation);
 }
 
@@ -88,22 +99,21 @@ void ASPlayerPawn::Tick(float DeltaTime)
 void ASPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	//CastChecked does not check if cast succed
+	UEnhancedInputComponent* input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
+	const ARTSPlayerController* playerController = Cast<ARTSPlayerController>(GetController());
 
-	//void (ASPlayerPawn::*forwardFunction)(float) = &ASPlayerPawn::Forward;
-	PlayerInputComponent->BindAxis(TEXT("Forward"), this, &ASPlayerPawn::Forward);
-	PlayerInputComponent->BindAxis(TEXT("Right"), this, &ASPlayerPawn::Right);
-	PlayerInputComponent->BindAxis(TEXT("Zoom"), this, &ASPlayerPawn::Zoom);
-	PlayerInputComponent->BindAxis(TEXT("RotateHorizontal"), this, &ASPlayerPawn::RotateHorizontal);
-	PlayerInputComponent->BindAxis(TEXT("RotateVertical"), this, &ASPlayerPawn::RotateVertical);
-	PlayerInputComponent->BindAxis(TEXT("MouseLeft"), this, &ASPlayerPawn::LeftMouseInputHeld);
-	
-	PlayerInputComponent->BindAction(TEXT("RotateRight"),IE_Pressed,this, &ASPlayerPawn::RotateRight);
-	PlayerInputComponent->BindAction(TEXT("RotateLeft"),IE_Pressed,this, &ASPlayerPawn::RotateLeft);
-	PlayerInputComponent->BindAction(TEXT("Rotate"),IE_Pressed,this, &ASPlayerPawn::EnableRotate);
-	PlayerInputComponent->BindAction(TEXT("Rotate"),IE_Released,this, &ASPlayerPawn::DisableRotate);
-
-	PlayerInputComponent->BindAction(TEXT("MouseLeft"),IE_Pressed,this, &ASPlayerPawn::MouseLeftPressed);
-	PlayerInputComponent->BindAction(TEXT("MouseLeft"),IE_Released,this, &ASPlayerPawn::MouseLeftReleased);
+	if(IsValid(input) && IsValid(playerController))
+	{
+		if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(playerController->GetInputActionsAsset()))
+		{
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Move, this, &ASPlayerPawn::Move);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Zoom, this, &ASPlayerPawn::Zoom);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Look, this, &ASPlayerPawn::Look);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Rotate, this, &ASPlayerPawn::Rotate);
+			EPlayerInputActions::BindInput_StartTriggerComplete(input, playerActions->Select, this,&ASPlayerPawn::Select, &ASPlayerPawn::SelectHold, &ASPlayerPawn::SelectEnd);
+		}
+	}
 }
 
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
@@ -126,60 +136,40 @@ void ASPlayerPawn::GetTerrainPosition(FVector& terrainPosition)
 	}
 }
 
-void ASPlayerPawn::Forward(float AxisValue)
+void ASPlayerPawn::Move(const FInputActionValue& value)
 {
-	if(FMath::IsNearlyEqual(AxisValue, 0.0f)) return;
-	TargetLocation = SpringArmComponent->GetForwardVector() * (AxisValue * MoveSpeed) + TargetLocation;
-	GetTerrainPosition(TargetLocation);
+	if(!SpringArmComponent) return;
+	if(ensure(value.GetValueType() == EInputActionValueType::Axis2D))
+	{
+		TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(value.Get<FVector>()) * MoveSpeed;
+		GetTerrainPosition(TargetLocation);
+	}
 }
 
-void ASPlayerPawn::Right(float AxisValue)
+void ASPlayerPawn::Zoom(const FInputActionValue& value)
 {
-	if(FMath::IsNearlyEqual(AxisValue, 0.0f)) return;
-	TargetLocation = SpringArmComponent->GetRightVector() * (AxisValue * MoveSpeed) + TargetLocation;
-	GetTerrainPosition(TargetLocation);
+	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	{
+		TargetZoom = FMath::Clamp(TargetZoom + value.Get<float>() * ZoomSpeed, MinZoom, MaxZoom);
+	}
 }
 
-void ASPlayerPawn::Zoom(float AxisValue)
+void ASPlayerPawn::Look(const FInputActionValue& value)
 {
-	if(FMath::IsNearlyEqual(AxisValue, 0.0f)) return;
-	
-	const float zoom = AxisValue * 100.f;
-	TargetZoom = FMath::Clamp(zoom * TargetZoom, MinZoom, MaxZoom);
+	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	{
+		const float newPitch = value.Get<float>() * RotateSpeed * 0.5f;
+		TargetRotation = FRotator(TargetRotation.Pitch + newPitch, TargetRotation.Yaw,0);
+	}
 }
 
-void ASPlayerPawn::RotateHorizontal(float AxisValue)
+void ASPlayerPawn::Rotate(const FInputActionValue& value)
 {
-	if(FMath::IsNearlyEqual(AxisValue, 0.0f) || !CanRotate) return;
-
-	TargetRotation = UKismetMathLibrary::ComposeRotators(TargetRotation, FRotator(0.0f,AxisValue,0.0f));
-}
-
-void ASPlayerPawn::RotateVertical(float AxisValue)
-{
-	if(FMath::IsNearlyEqual(AxisValue, 0.0f) || !CanRotate) return;
-
-	TargetRotation = UKismetMathLibrary::ComposeRotators(TargetRotation, FRotator(AxisValue,0.0f,0.0f));
-}
-
-void ASPlayerPawn::RotateRight()
-{
-	TargetRotation = UKismetMathLibrary::ComposeRotators(TargetRotation, FRotator(0.0f,-45.0f,0.0f));
-}
-
-void ASPlayerPawn::RotateLeft()
-{
-	TargetRotation = UKismetMathLibrary::ComposeRotators(TargetRotation, FRotator(0.0f,45.0f,0.0f));
-}
-
-void ASPlayerPawn::EnableRotate()
-{
-	CanRotate = true;
-}
-
-void ASPlayerPawn::DisableRotate()
-{
-	CanRotate = false;
+	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	{
+		const float newRotation = value.Get<float>() * RotateSpeed; //Reminder: value negate
+		TargetRotation = FRotator(TargetRotation.Pitch, TargetRotation.Yaw + newRotation,0);
+	}
 }
 
 void ASPlayerPawn::EdgeScroll()
@@ -187,39 +177,40 @@ void ASPlayerPawn::EdgeScroll()
 	if(UWorld* worldContext = GetWorld())
 	{
 		const FVector2D viewportSize = UWidgetLayoutLibrary::GetViewportSize(worldContext);
-	
 		FVector2D mousePosition = UWidgetLayoutLibrary::GetMousePositionOnViewport(worldContext);
 		mousePosition *= UWidgetLayoutLibrary::GetViewportScale(worldContext);
 		mousePosition /= viewportSize;
-
+		
 		//Right/Left
-		if(mousePosition.X > 0.98f && mousePosition.X < 1.0f)
+		constexpr float highLimit = 0.98f;
+		constexpr float lowLimit = 0.02f;
+		if(mousePosition.X > highLimit && mousePosition.X < 1)
 		{
-			Right(EdgeScrollSpeed);
+			//NOTE Same as: TargetLocation += SpringArmComponent->GetRightVector() * EdgeScrollSpeed;
+			TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(FVector::RightVector) * EdgeScrollSpeed;
 		}
-		else if(mousePosition.X < 0.02f && mousePosition.X > 0.0f)
+		else if(mousePosition.X < lowLimit && mousePosition.X > 0)
 		{
-			Right(-EdgeScrollSpeed);
+			//NOTE Same as: TargetLocation += SpringArmComponent->GetRightVector() * -EdgeScrollSpeed;
+			TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(FVector::LeftVector) * EdgeScrollSpeed;
 		}
 
-		//Forward/backward
-		if(mousePosition.Y > 0.98f && mousePosition.Y < 1.0f)
+		//Backward/Forward
+		if(mousePosition.Y > highLimit && mousePosition.Y < 1)
 		{
-			Forward(-EdgeScrollSpeed);
+			//NOTE same as : TargetLocation += SpringArmComponent->GetForwardVector() * -EdgeScrollSpeed;
+			TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(FVector::BackwardVector) * EdgeScrollSpeed;
 		}
-		else if(mousePosition.Y < 0.02f && mousePosition.Y > 0.0f)
+		else if(mousePosition.Y < lowLimit && mousePosition.Y > 0)
 		{
-			Forward(EdgeScrollSpeed);
+			//NOTE same as : TargetLocation += SpringArmComponent->GetForwardVector() * EdgeScrollSpeed;
+			TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(FVector::ForwardVector) * EdgeScrollSpeed;
 		}
+		GetTerrainPosition(TargetLocation);
 	}
 }
 
-/*
-void ASPlayerPawn::OnMovement()
-{
-	
-}
-*/
+
 
 void ASPlayerPawn::CameraBounds()
 {
@@ -232,9 +223,7 @@ void ASPlayerPawn::CameraBounds()
 	{
 		newPitch = -RotatePitchMin;
 	}
-
 	TargetRotation = FRotator(newPitch, TargetRotation.Yaw, 0.0f);
-	//TargetLocation = FVector(TargetLocation.X, TargetLocation.Y, 0.0f);
 }
 
 /** Mouse Inputs **/
@@ -255,60 +244,36 @@ AActor* ASPlayerPawn::GetSelectedObject()
 		if(FHitResult hit; world->LineTraceSingleByChannel(hit, worldLocation, end, ECC_Visibility, params))
 		{
 			return hit.GetActor();
-			/*
-			if(AActor* hitActor = hit.GetActor())
-			{
-				return hitActor;
-			}
-			*/
+			//if(AActor* hitActor = hit.GetActor()){return hitActor;}
 		}
 	}
 	return nullptr;
 }
 
-void ASPlayerPawn::MouseLeftPressed()
+void ASPlayerPawn::Select(const FInputActionValue& value)
 {
 	if(!RTSPlayerController) return;
 	BoxSelectionEnabled = false;
 	RTSPlayerController->HandleSelection(nullptr);
-	LeftMouseHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
+	SelectHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
 }
 
-void ASPlayerPawn::MouseLeftReleased()
+void ASPlayerPawn::SelectHold(const FInputActionValue& value)
 {
 	if(!RTSPlayerController) return;
-	//RTSPlayerController->HandleSelection(GetSelectedObject());
-	if(BoxSelectionEnabled && SelectionBox)
-	{
-		SelectionBox->End();
-		BoxSelectionEnabled = false;
-	}
-	else
-	{
-		RTSPlayerController->HandleSelection(GetSelectedObject());
-	}
-}
-
-void ASPlayerPawn::LeftMouseInputHeld(float axisValue)
-{
-	if(!RTSPlayerController || FMath::IsNearlyEqual(axisValue, 0.0f)) return;
-	if(RTSPlayerController->GetInputKeyTimeDown(EKeys::LeftMouseButton) < LeftMouseHoldThreshold) return;
+	const float mouseDistance = (SelectHitLocation - RTSPlayerController->GetMousePositionOnTerrain()).Length();
+	if(mouseDistance < 100) return;
+	
 	if(!BoxSelectionEnabled && SelectionBox)
 	{
-		SelectionBox->Start(LeftMouseHitLocation, TargetRotation);
+		SelectionBox->Start(SelectHitLocation, TargetRotation);
 		BoxSelectionEnabled = true;
 	}
 }
 
-void ASPlayerPawn::MouseRightPressed()
-{
-}
-
-void ASPlayerPawn::MouseRightReleased()
+void ASPlayerPawn::SelectEnd(const FInputActionValue& value)
 {
 	if(!RTSPlayerController) return;
-	//Box selection active?
-	/*
 	if(BoxSelectionEnabled && SelectionBox)
 	{
 		SelectionBox->End();
@@ -318,8 +283,26 @@ void ASPlayerPawn::MouseRightReleased()
 	{
 		RTSPlayerController->HandleSelection(GetSelectedObject());
 	}
-	*/
 }
+
+void ASPlayerPawn::TestPlacement(const FInputActionValue& value)
+{
+	if(!RTSPlayerController) return;
+	//RTSPlayerController->SetPlacementPreview();
+}
+
+void ASPlayerPawn::Place(const FInputActionValue& value)
+{
+	if(!RTSPlayerController) return;
+	//if(RTSPlayerController->IsPlacementModeEnabled()) RTSPlayerController->Place();
+}
+
+void ASPlayerPawn::PlaceCancel(const FInputActionValue& value)
+{
+	if(!RTSPlayerController) return;
+	//if(RTSPlayerController->IsPlacementModeEnabled()) RTSPlayerController->PlaceCancel();
+}
+
 
 void ASPlayerPawn::CreateSelectionBox()
 {
@@ -336,4 +319,6 @@ void ASPlayerPawn::CreateSelectionBox()
 		}
 	}
 }
+
+
 

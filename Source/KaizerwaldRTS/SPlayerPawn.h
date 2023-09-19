@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "InputActionValue.h"
 #include "GameFramework/Pawn.h"
 #include "SPlayerPawn.generated.h"
 
@@ -35,7 +36,7 @@ protected:
 	float MoveSpeed = 20.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
-	float EdgeScrollSpeed = 3.0f;
+	float EdgeScrollSpeed = 30.0f;
 	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
 	float RotateSpeed = 2.0f;
@@ -47,7 +48,7 @@ protected:
 	float RotatePitchMax = 80.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
-	float ZoomSpeed = 2.0f;
+	float ZoomSpeed = 200.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
 	float MinZoom = 500.0f;
@@ -55,10 +56,10 @@ protected:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
 	float MaxZoom = 4000.0f;
 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Camera")
+	float Smoothing = 2.0f;
+	
 	/** Box selection **/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Mouse")
-	float LeftMouseHoldThreshold = 0.15f;
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Mouse")
 	TSubclassOf<ASelectionBox> SelectionBoxClass;
 
@@ -71,7 +72,7 @@ protected:
 
 	//Move to SelectionBox?
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Settings|Mouse")
-	FVector LeftMouseHitLocation; //In Unity was -> MouseStart
+	FVector SelectHitLocation; //In Unity was -> MouseStart
 	
 private:
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, meta = (AllowPrivateAccess = "true"))
@@ -91,12 +92,9 @@ private:
 
 	UPROPERTY()
 	float TargetZoom;
-
-	UPROPERTY()
-	bool CanRotate;
 	
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
-//║											       ◆◆◆◆◆◆ Methods ◆◆◆◆◆◆			                                   ║
+//║											       ◆◆◆◆◆◆ METHODS ◆◆◆◆◆◆			                                   ║
 //╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 public:
 	// Sets default values for this pawn's properties
@@ -117,34 +115,6 @@ protected:
 	//╓────────────────────────────────────────────────────────────────────────────────────────────────────────────────╖
 	//║ ◈◈◈◈◈◈ Movement Methods ◈◈◈◈◈◈					                                                           ║
 	//╙────────────────────────────────────────────────────────────────────────────────────────────────────────────────╜
-	
-	UFUNCTION()
-	void Forward(float AxisValue);
-
-	UFUNCTION()
-	void Right(float AxisValue);
-
-	UFUNCTION()
-	void Zoom(float AxisValue);
-
-	UFUNCTION()
-	void RotateHorizontal(float AxisValue);
-
-	UFUNCTION()
-	void RotateVertical(float AxisValue);
-
-	UFUNCTION()
-	void RotateRight();
-
-	UFUNCTION()
-	void RotateLeft();
-
-	UFUNCTION()
-	void EnableRotate();
-
-	UFUNCTION()
-	void DisableRotate();
-
 	UFUNCTION()
 	void EdgeScroll();
 
@@ -152,28 +122,45 @@ protected:
 
 	UFUNCTION()
 	AActor* GetSelectedObject();
-
-	UFUNCTION()
-	void MouseLeftPressed();
-
-	UFUNCTION()
-	void MouseLeftReleased();
-
-	UFUNCTION()
-	void LeftMouseInputHeld(float axisValue);
-
-	UFUNCTION()
-	void MouseRightPressed();
-
-	UFUNCTION()
-	void MouseRightReleased();
-
+	
 	//Move so selection box?
 	UFUNCTION()
 	void CreateSelectionBox();
 	
 	//ENHANCED INPUTS
-	//void OnMovement();
+	UFUNCTION()
+	void Move(const FInputActionValue& value);
+
+	UFUNCTION()
+	void Zoom(const FInputActionValue& value);
+
+	UFUNCTION()
+	void Look(const FInputActionValue& value);
+	
+	UFUNCTION()
+	void Rotate(const FInputActionValue& value);
+
+	UFUNCTION()
+	void Select(const FInputActionValue& value);
+
+	UFUNCTION()
+	void SelectHold(const FInputActionValue& value);
+
+	UFUNCTION()
+	void SelectEnd(const FInputActionValue& value);
+
+	UFUNCTION()
+	void TestPlacement(const FInputActionValue& value);
+
+	//╓────────────────────────────────────────────────────────────────────────────────────────────────────────────────╖
+	//║ ◈◈◈◈◈◈ Placement Methods ◈◈◈◈◈◈				                                                           ║
+	//╙────────────────────────────────────────────────────────────────────────────────────────────────────────────────╜
+
+	UFUNCTION()
+	void Place(const FInputActionValue& value);
+
+	UFUNCTION()
+	void PlaceCancel(const FInputActionValue& value);
 	
 private:
 	UFUNCTION()

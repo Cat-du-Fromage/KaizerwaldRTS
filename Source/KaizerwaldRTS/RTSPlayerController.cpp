@@ -3,9 +3,11 @@
 
 #include "RTSPlayerController.h"
 
+#include "EnhancedInputSubsystems.h"
 #include "ISelectable.h"
+#include "PlacementPreview.h"
+#include "Input/PlayerInputActions.h"
 #include "Net/UnrealNetwork.h"
-
 
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
 //║												  ◆◆◆◆◆◆ Constructor ◆◆◆◆◆◆	 					                       ║
@@ -32,24 +34,84 @@ void ARTSPlayerController::BeginPlay()
 	bShowMouseCursor = true;
 }
 
+void ARTSPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+	
+	if(UEnhancedInputLocalPlayerSubsystem* inputSubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		inputSubSystem->ClearAllMappings();
+		SetInputDefault();
+	}
+}
+
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
 //║											     ◆◆◆◆◆◆ Class Methods ◆◆◆◆◆◆		                                   ║
 //╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+void ARTSPlayerController::AddInputMapping(const UInputMappingContext* inputMapping, const int32 mappingPriority) const
+{
+	if(UEnhancedInputLocalPlayerSubsystem* inputSubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		ensure(inputMapping);
+		if(!inputSubSystem->HasMappingContext(inputMapping))
+		{
+			inputSubSystem->AddMappingContext(inputMapping, mappingPriority);
+		}
+	}
+}
+
+void ARTSPlayerController::RemoveInputMapping(const UInputMappingContext* inputMapping) const
+{
+	if(UEnhancedInputLocalPlayerSubsystem* inputSubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		ensure(inputMapping);
+		inputSubSystem->RemoveMappingContext(inputMapping);
+	}
+}
+
+void ARTSPlayerController::SetInputDefault(const bool enabled) const
+{
+	ensureMsgf(PlayerActionAsset, TEXT("PlayerActionAsset is NULL !"));
+
+	if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(PlayerActionAsset))
+	{
+		ensure(playerActions->MapPriorityCameraInput);
+		
+		if(enabled)
+		{
+			AddInputMapping(playerActions->PlayerInputMappingContext, playerActions->MapPriorityCameraInput);
+		}
+		else
+		{
+			RemoveInputMapping(playerActions->PlayerInputMappingContext);
+		}
+	}
+}
+
+void ARTSPlayerController::SetInputPlacement(const bool enabled) const
+{
+	if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(PlayerActionAsset))
+	{
+		ensure(playerActions->PlacementMappingContext);
+		if(enabled)
+		{
+			AddInputMapping(playerActions->PlacementMappingContext, playerActions->MapPriorityPlacement);
+			SetInputDefault(!enabled);
+		}
+		else
+		{
+			RemoveInputMapping(playerActions->PlacementMappingContext);
+			SetInputDefault();
+		}
+	}
+}
+
 
 void ARTSPlayerController::HandleSelection(AActor* actorToSelect)
 {
 	if(Cast<ISelectable>(actorToSelect))
 	{
-		/*
-		if(actorToSelect && ActorSelected(actorToSelect))
-		{
-			ServerDeSelect(actorToSelect);
-		}
-		else
-		{
-			ServerSelect(actorToSelect);
-		}
-		*/
 		ActorSelected(actorToSelect) ? ServerDeSelect(actorToSelect) : ServerSelect(actorToSelect);
 	}
 	else
@@ -70,6 +132,22 @@ FVector ARTSPlayerController::GetMousePositionOnTerrain() const
 	
 	const FVector end = worldLocation + worldDirection * 1000000.0f;
 	if(FHitResult hit; GetWorld()->LineTraceSingleByChannel(hit, worldLocation, end, ECC_GameTraceChannel1))
+	{
+		if(hit.bBlockingHit)
+		{
+			return hit.Location;
+		}
+	}
+	return FVector::ZeroVector;
+}
+
+FVector ARTSPlayerController::GetMousePositionOnSurface() const
+{
+	FVector worldLocation, worldDirection;
+	DeprojectMousePositionToWorld(worldLocation, worldDirection);
+	
+	const FVector end = worldLocation + worldDirection * 1000000.0f;
+	if(FHitResult hit; GetWorld()->LineTraceSingleByChannel(hit, worldLocation, end, ECC_Visibility))
 	{
 		if(hit.bBlockingHit)
 		{
@@ -137,4 +215,39 @@ void ARTSPlayerController::ServerClearSelected_Implementation()
 void ARTSPlayerController::OnRepSelected()
 {
 	OnSelectionUpdated.Broadcast();
+}
+
+void ARTSPlayerController::SetPlacementPreview()
+{
+	if(PreviewActorType && !bPlacementModeEnabled)
+	{
+		FTransform spawnTransform;
+		spawnTransform.SetLocation(GetMousePositionOnSurface());
+		FActorSpawnParameters spawnParams;
+		spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		PlacementPreviewActor = GetWorld()->SpawnActor<APlacementPreview>(PreviewActorType, spawnTransform, spawnParams);
+
+		if(PlacementPreviewActor)
+		{
+			//SetInputPlacement();
+			bPlacementModeEnabled = true;
+		}
+	}
+}
+
+void ARTSPlayerController::Place()
+{
+	if(!IsPlacementModeEnabled() || !PlacementPreviewActor) return;
+	bPlacementModeEnabled = false;
+	SetInputPlacement(false);
+	ServerPlace(PlacementPreviewActor);
+}
+
+void ARTSPlayerController::PlaceCancel()
+{
+}
+
+void ARTSPlayerController::ServerPlace_Implementation(AActor* placementPreviewToSpawn)
+{
 }
