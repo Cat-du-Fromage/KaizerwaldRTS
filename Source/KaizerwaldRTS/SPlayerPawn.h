@@ -129,38 +129,80 @@ protected:
 	
 	//ENHANCED INPUTS
 	UFUNCTION()
-	void Move(const FInputActionValue& value);
+	void Move(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void Zoom(const FInputActionValue& value);
+	void Zoom(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void Look(const FInputActionValue& value);
+	void Look(const FInputActionValue& inputValue);
 	
 	UFUNCTION()
-	void Rotate(const FInputActionValue& value);
+	void Rotate(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void Select(const FInputActionValue& value);
+	void Select(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void SelectHold(const FInputActionValue& value);
+	void SelectHold(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void SelectEnd(const FInputActionValue& value);
+	void SelectEnd(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void TestPlacement(const FInputActionValue& value);
+	void TestPlacement(const FInputActionValue& inputValue);
+
+	UFUNCTION()
+	void SelectDoubleTap(const FInputActionValue& inputValue);
+
+	//┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+	//│  ◇◇◇◇◇◇ MODIFIER KEYS ◇◇◇◇◇◇								                                                   │
+	//└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+	UFUNCTION()
+	void Shift(const FInputActionValue& inputValue);
+
+	UFUNCTION()
+	void Alt(const FInputActionValue& inputValue);
+
+	UFUNCTION()
+	void Ctrl(const FInputActionValue& inputValue);
 
 	//╓────────────────────────────────────────────────────────────────────────────────────────────────────────────────╖
 	//║ ◈◈◈◈◈◈ Placement Methods ◈◈◈◈◈◈				                                                           ║
 	//╙────────────────────────────────────────────────────────────────────────────────────────────────────────────────╜
 
 	UFUNCTION()
-	void Place(const FInputActionValue& value);
+	void Place(const FInputActionValue& inputValue);
 
 	UFUNCTION()
-	void PlaceCancel(const FInputActionValue& value);
+	void PlaceCancel(const FInputActionValue& inputValue);
+
+	//┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+	//│  ◇◇◇◇◇◇ SHIFT ◇◇◇◇◇◇										                                                   │
+	//└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+	UFUNCTION()
+	void ShiftSelect(const FInputActionValue& inputValue);
+
+	//┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+	//│  ◇◇◇◇◇◇ ALT ◇◇◇◇◇◇											                                                   │
+	//└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+	UFUNCTION()
+	void AltSelect(const FInputActionValue& inputValue);
+	
+	//void AltSelectHold(const FInputActionValue& inputValue);
+
+	UFUNCTION()
+	void AltSelectEnd(const FInputActionValue& inputValue);
+
+	//┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+	//│  ◇◇◇◇◇◇ CTRL ◇◇◇◇◇◇											                                                   │
+	//└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+	UFUNCTION()
+	void CtrlSelect(const FInputActionValue& inputValue);
+
+	UFUNCTION()
+	void CtrlSelectEnd(const FInputActionValue& inputValue);
 	
 private:
 	UFUNCTION()

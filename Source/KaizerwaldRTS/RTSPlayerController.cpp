@@ -5,6 +5,7 @@
 
 #include "EnhancedInputSubsystems.h"
 #include "ISelectable.h"
+#include "KaizerwaldRTSCharacter.h"
 #include "PlacementPreview.h"
 #include "Input/PlayerInputActions.h"
 #include "Net/UnrealNetwork.h"
@@ -14,6 +15,7 @@
 //╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 ARTSPlayerController::ARTSPlayerController(const FObjectInitializer& objectInitializer)
 {
+	bPlacementModeEnabled = false;
 }
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
 //║										         ◆◆◆◆◆◆ Unreal Events ◆◆◆◆◆◆		                                   ║
@@ -43,6 +45,13 @@ void ARTSPlayerController::SetupInputComponent()
 		inputSubSystem->ClearAllMappings();
 		SetInputDefault();
 	}
+}
+
+void ARTSPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if(!bPlacementModeEnabled || !PlacementPreviewActor) return;
+	UpdatePlacement();
 }
 
 //╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
@@ -107,6 +116,63 @@ void ARTSPlayerController::SetInputPlacement(const bool enabled) const
 	}
 }
 
+void ARTSPlayerController::SetInputShift(const bool enabled) const
+{
+	ensureMsgf(PlayerActionAsset, TEXT("PlayerActionAsset is NULL !"));
+	if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(PlayerActionAsset))
+	{
+		ensure(playerActions->MappingContextShift);
+		if(enabled)
+		{
+			AddInputMapping(playerActions->MappingContextShift, playerActions->MapPriorityShift);
+			//SetInputDefault(!enabled);
+		}
+		else
+		{
+			RemoveInputMapping(playerActions->MappingContextShift);
+			//SetInputDefault();
+		}
+	}
+}
+
+void ARTSPlayerController::SetInputAlt(const bool enabled) const
+{
+	ensureMsgf(PlayerActionAsset, TEXT("PlayerActionAsset is NULL !"));
+	if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(PlayerActionAsset))
+	{
+		ensure(playerActions->MappingContextAlt);
+		if(enabled)
+		{
+			AddInputMapping(playerActions->MappingContextAlt, playerActions->MapPriorityAlt);
+			//SetInputDefault(!enabled);
+		}
+		else
+		{
+			RemoveInputMapping(playerActions->MappingContextAlt);
+			//SetInputDefault();
+		}
+	}
+}
+
+void ARTSPlayerController::SetInputCtrl(const bool enabled) const
+{
+	ensureMsgf(PlayerActionAsset, TEXT("PlayerActionAsset is NULL !"));
+	if(const UPlayerInputActions* playerActions = Cast<UPlayerInputActions>(PlayerActionAsset))
+	{
+		ensure(playerActions->MappingContextCtrl);
+		if(enabled)
+		{
+			AddInputMapping(playerActions->MappingContextCtrl, playerActions->MapPriorityCtrl);
+			//SetInputDefault(!enabled);
+		}
+		else
+		{
+			RemoveInputMapping(playerActions->MappingContextCtrl);
+			//SetInputDefault();
+		}
+	}
+}
+
 
 void ARTSPlayerController::HandleSelection(AActor* actorToSelect)
 {
@@ -123,6 +189,19 @@ void ARTSPlayerController::HandleSelection(AActor* actorToSelect)
 void ARTSPlayerController::HandleSelection(TArray<AActor*> actorsToSelect)
 {
 	ServerSelectGroup(actorsToSelect);
+}
+
+void ARTSPlayerController::HandleDeSelection(AActor* actorToDeSelect)
+{
+	if(actorToDeSelect && ActorSelected(actorToDeSelect))
+	{
+		ServerDeSelect(actorToDeSelect);
+	}
+}
+
+void ARTSPlayerController::HandleDeSelection(TArray<AActor*> actorsToDeSelect)
+{
+	ServerDeSelectGroup(actorsToDeSelect);
 }
 
 FVector ARTSPlayerController::GetMousePositionOnTerrain() const
@@ -164,7 +243,7 @@ bool ARTSPlayerController::ActorSelected(AActor* actorToCheck) const
 
 void ARTSPlayerController::ServerSelect_Implementation(AActor* actorToSelect)
 {
-	ServerClearSelected();
+	//ServerClearSelected();
 	if(ISelectable* selectable = Cast<ISelectable>(actorToSelect))
 	{
 		selectable->Select();
@@ -191,6 +270,25 @@ void ARTSPlayerController::ServerSelectGroup_Implementation(const TArray<AActor*
 	validActors.Empty();
 }
 
+void ARTSPlayerController::ServerDeSelectGroup_Implementation(const TArray<AActor*>& actorsToDeSelect)
+{
+	for(AActor* actorToDeselect : actorsToDeSelect)
+	{
+		if(!actorToDeselect) continue;
+		for(int32 i = Selections.Num() - 1; i >= 0; --i)
+		{
+			if(actorToDeselect != Selections[i]) continue;
+			if(ISelectable* selectable = Cast<ISelectable>(actorToDeselect))
+			{
+				selectable->DeSelect();
+				Selections.RemoveAt(i);
+				break;
+			}
+		}
+	}
+	OnRepSelected();
+}
+
 void ARTSPlayerController::ServerDeSelect_Implementation(AActor* actorToDeSelect)
 {
 	if(ISelectable* selectable = Cast<ISelectable>(actorToDeSelect))
@@ -210,11 +308,18 @@ void ARTSPlayerController::ServerClearSelected_Implementation()
 		selectable->DeSelect();
 	}
 	Selections.Empty();
+	OnRepSelected();
 }
 
 void ARTSPlayerController::OnRepSelected()
 {
 	OnSelectionUpdated.Broadcast();
+}
+
+void ARTSPlayerController::UpdatePlacement() const
+{
+	if(!PlacementPreviewActor) return;
+	PlacementPreviewActor->SetActorLocation(GetMousePositionOnSurface());
 }
 
 void ARTSPlayerController::SetPlacementPreview()
@@ -230,7 +335,7 @@ void ARTSPlayerController::SetPlacementPreview()
 
 		if(PlacementPreviewActor)
 		{
-			//SetInputPlacement();
+			SetInputPlacement();
 			bPlacementModeEnabled = true;
 		}
 	}
@@ -246,8 +351,31 @@ void ARTSPlayerController::Place()
 
 void ARTSPlayerController::PlaceCancel()
 {
+	if(!IsPlacementModeEnabled() || !PlacementPreviewActor) return;
+	bPlacementModeEnabled = false;
+	SetInputPlacement(false);
+	EndPlacement();
 }
 
 void ARTSPlayerController::ServerPlace_Implementation(AActor* placementPreviewToSpawn)
 {
+	if(const APlacementPreview* preview = Cast<APlacementPreview>(placementPreviewToSpawn))
+	{
+		FTransform spawnTransform;
+		const FVector location = preview->GetActorLocation();
+		spawnTransform.SetLocation(location + FVector::UpVector * 100.0f);
+		FActorSpawnParameters spawnParams;
+		spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		if(AKaizerwaldRTSCharacter* newUnit = GetWorld()->SpawnActor<AKaizerwaldRTSCharacter>(preview->PlaceableClass, spawnTransform, spawnParams))
+		{
+			newUnit->SetOwner(this);
+		}
+	}
+	EndPlacement();
+}
+
+void ARTSPlayerController::EndPlacement_Implementation()
+{
+	PlacementPreviewActor->Destroy();
 }

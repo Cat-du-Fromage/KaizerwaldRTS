@@ -18,7 +18,6 @@ class KAIZERWALDRTS_API APlacementPreview : public AActor
 public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Placement")
 	TSubclassOf<AKaizerwaldRTSCharacter> PlaceableClass;
-protected:
 
 private:
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))

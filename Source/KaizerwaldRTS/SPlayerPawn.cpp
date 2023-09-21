@@ -3,8 +3,10 @@
 
 #include "SPlayerPawn.h"
 
+#include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "KaizerwaldRTSCharacter.h"
 #include "RTSPlayerController.h"
 #include "SelectionBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -112,6 +114,24 @@ void ASPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Look, this, &ASPlayerPawn::Look);
 			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Rotate, this, &ASPlayerPawn::Rotate);
 			EPlayerInputActions::BindInput_StartTriggerComplete(input, playerActions->Select, this,&ASPlayerPawn::Select, &ASPlayerPawn::SelectHold, &ASPlayerPawn::SelectEnd);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->TestPlacement, this, &ASPlayerPawn::TestPlacement);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->SelectDoubleTap, this, &ASPlayerPawn::SelectDoubleTap);
+			
+			/** Placement **/
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->Place, this, &ASPlayerPawn::Place);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->PlaceCancel, this, &ASPlayerPawn::PlaceCancel);
+
+			/** Shift **/
+			EPlayerInputActions::BindInput_Simple(input, playerActions->Shift, this, &ASPlayerPawn::Shift, &ASPlayerPawn::Shift);
+			EPlayerInputActions::BindInput_TriggerOnly(input, playerActions->ShiftSelect, this, &ASPlayerPawn::ShiftSelect);
+
+			/** Alt **/
+			EPlayerInputActions::BindInput_Simple(input, playerActions->Alt, this, &ASPlayerPawn::Alt, &ASPlayerPawn::Alt);
+			EPlayerInputActions::BindInput_StartTriggerComplete(input, playerActions->AltSelect, this, &ASPlayerPawn::AltSelect, &ASPlayerPawn::SelectHold, &ASPlayerPawn::AltSelectEnd);
+
+			/** Ctrl **/
+			EPlayerInputActions::BindInput_Simple(input, playerActions->Ctrl, this, &ASPlayerPawn::Ctrl, &ASPlayerPawn::Ctrl);
+			EPlayerInputActions::BindInput_StartTriggerComplete(input, playerActions->CtrlSelect, this, &ASPlayerPawn::CtrlSelect, &ASPlayerPawn::SelectHold, &ASPlayerPawn::CtrlSelectEnd);
 		}
 	}
 }
@@ -136,38 +156,38 @@ void ASPlayerPawn::GetTerrainPosition(FVector& terrainPosition)
 	}
 }
 
-void ASPlayerPawn::Move(const FInputActionValue& value)
+void ASPlayerPawn::Move(const FInputActionValue& inputValue)
 {
 	if(!SpringArmComponent) return;
-	if(ensure(value.GetValueType() == EInputActionValueType::Axis2D))
+	if(ensure(inputValue.GetValueType() == EInputActionValueType::Axis2D))
 	{
-		TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(value.Get<FVector>()) * MoveSpeed;
+		TargetLocation += SpringArmComponent->GetTargetRotation().RotateVector(inputValue.Get<FVector>()) * MoveSpeed;
 		GetTerrainPosition(TargetLocation);
 	}
 }
 
-void ASPlayerPawn::Zoom(const FInputActionValue& value)
+void ASPlayerPawn::Zoom(const FInputActionValue& inputValue)
 {
-	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	if(ensure(inputValue.GetValueType() == EInputActionValueType::Axis1D))
 	{
-		TargetZoom = FMath::Clamp(TargetZoom + value.Get<float>() * ZoomSpeed, MinZoom, MaxZoom);
+		TargetZoom = FMath::Clamp(TargetZoom + inputValue.Get<float>() * ZoomSpeed, MinZoom, MaxZoom);
 	}
 }
 
-void ASPlayerPawn::Look(const FInputActionValue& value)
+void ASPlayerPawn::Look(const FInputActionValue& inputValue)
 {
-	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	if(ensure(inputValue.GetValueType() == EInputActionValueType::Axis1D))
 	{
-		const float newPitch = value.Get<float>() * RotateSpeed * 0.5f;
+		const float newPitch = inputValue.Get<float>() * RotateSpeed * 0.5f;
 		TargetRotation = FRotator(TargetRotation.Pitch + newPitch, TargetRotation.Yaw,0);
 	}
 }
 
-void ASPlayerPawn::Rotate(const FInputActionValue& value)
+void ASPlayerPawn::Rotate(const FInputActionValue& inputValue)
 {
-	if(ensure(value.GetValueType() == EInputActionValueType::Axis1D))
+	if(ensure(inputValue.GetValueType() == EInputActionValueType::Axis1D))
 	{
-		const float newRotation = value.Get<float>() * RotateSpeed; //Reminder: value negate
+		const float newRotation = inputValue.Get<float>() * RotateSpeed; //Reminder: value negate
 		TargetRotation = FRotator(TargetRotation.Pitch, TargetRotation.Yaw + newRotation,0);
 	}
 }
@@ -250,15 +270,16 @@ AActor* ASPlayerPawn::GetSelectedObject()
 	return nullptr;
 }
 
-void ASPlayerPawn::Select(const FInputActionValue& value)
+void ASPlayerPawn::Select(const FInputActionValue& inputValue)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Default Select Call"));
 	if(!RTSPlayerController) return;
 	BoxSelectionEnabled = false;
 	RTSPlayerController->HandleSelection(nullptr);
 	SelectHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
 }
 
-void ASPlayerPawn::SelectHold(const FInputActionValue& value)
+void ASPlayerPawn::SelectHold(const FInputActionValue& inputValue)
 {
 	if(!RTSPlayerController) return;
 	const float mouseDistance = (SelectHitLocation - RTSPlayerController->GetMousePositionOnTerrain()).Length();
@@ -271,7 +292,7 @@ void ASPlayerPawn::SelectHold(const FInputActionValue& value)
 	}
 }
 
-void ASPlayerPawn::SelectEnd(const FInputActionValue& value)
+void ASPlayerPawn::SelectEnd(const FInputActionValue& inputValue)
 {
 	if(!RTSPlayerController) return;
 	if(BoxSelectionEnabled && SelectionBox)
@@ -285,22 +306,126 @@ void ASPlayerPawn::SelectEnd(const FInputActionValue& value)
 	}
 }
 
-void ASPlayerPawn::TestPlacement(const FInputActionValue& value)
+void ASPlayerPawn::TestPlacement(const FInputActionValue& inputValue)
 {
 	if(!RTSPlayerController) return;
-	//RTSPlayerController->SetPlacementPreview();
+	RTSPlayerController->SetPlacementPreview();
 }
 
-void ASPlayerPawn::Place(const FInputActionValue& value)
+void ASPlayerPawn::SelectDoubleTap(const FInputActionValue& inputValue)
 {
 	if(!RTSPlayerController) return;
-	//if(RTSPlayerController->IsPlacementModeEnabled()) RTSPlayerController->Place();
+	if(AActor* selection = GetSelectedObject())
+	{
+		if(AKaizerwaldRTSCharacter* selectedCharacter = Cast<AKaizerwaldRTSCharacter>(selection))
+		{
+			RTSPlayerController->HandleDeSelection(selectedCharacter);
+			selectedCharacter->Destroy();
+		}
+	}
 }
 
-void ASPlayerPawn::PlaceCancel(const FInputActionValue& value)
+void ASPlayerPawn::Shift(const FInputActionValue& inputValue)
 {
 	if(!RTSPlayerController) return;
-	//if(RTSPlayerController->IsPlacementModeEnabled()) RTSPlayerController->PlaceCancel();
+	UE_LOG(LogTemp, Warning, TEXT("Shift: %s"), inputValue.Get<bool>() ? TEXT("ON") : TEXT("OFF"));
+	RTSPlayerController->SetInputShift(inputValue.Get<bool>());
+}
+
+void ASPlayerPawn::Alt(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	UE_LOG(LogTemp, Warning, TEXT("Alt: %s"), inputValue.Get<bool>() ? TEXT("ON") : TEXT("OFF"));
+	RTSPlayerController->SetInputAlt(inputValue.Get<bool>());
+}
+
+void ASPlayerPawn::Ctrl(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	UE_LOG(LogTemp, Warning, TEXT("Ctrl: %s"), inputValue.Get<bool>() ? TEXT("ON") : TEXT("OFF"));
+	RTSPlayerController->SetInputCtrl(inputValue.Get<bool>());
+}
+
+void ASPlayerPawn::ShiftSelect(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	if(AActor* selection = GetSelectedObject())
+	{
+		const TSubclassOf<AActor> selectionClass = selection->GetClass();
+
+		TArray<AActor*> actors = { selection };
+		for(TActorIterator<AActor> actorItr(GetWorld(), selectionClass); actorItr; ++actorItr)
+		{
+			AActor* actor = *actorItr;
+			const float distanceSq =  FVector::DistSquared(actor->GetActorLocation(), SelectHitLocation);
+			if(distanceSq > FMath::Square(1000.0f)) continue;
+			actors.AddUnique(actor);
+		}
+		RTSPlayerController->HandleSelection(actors);
+	}
+	else
+	{
+		RTSPlayerController->HandleSelection(nullptr);
+	}
+}
+
+void ASPlayerPawn::AltSelect(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	BoxSelectionEnabled = false;
+	SelectHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
+}
+
+void ASPlayerPawn::AltSelectEnd(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	if(BoxSelectionEnabled && SelectionBox)
+	{
+		SelectionBox->End(false);
+		BoxSelectionEnabled = false;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DESELECT ALT"));
+		RTSPlayerController->HandleDeSelection(GetSelectedObject());
+	}
+}
+
+void ASPlayerPawn::CtrlSelect(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	//Same as AltSelect
+	BoxSelectionEnabled = false;
+	SelectHitLocation = RTSPlayerController->GetMousePositionOnTerrain();
+}
+
+void ASPlayerPawn::CtrlSelectEnd(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController) return;
+	if(BoxSelectionEnabled && SelectionBox)
+	{
+		SelectionBox->End(true, true);
+		BoxSelectionEnabled = false;
+	}
+	else
+	{
+		if(AActor* selection = GetSelectedObject())
+		{
+			RTSPlayerController->HandleSelection(selection);
+		}
+	}
+}
+
+void ASPlayerPawn::Place(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController || !RTSPlayerController->IsPlacementModeEnabled()) return;
+	RTSPlayerController->Place();
+}
+
+void ASPlayerPawn::PlaceCancel(const FInputActionValue& inputValue)
+{
+	if(!RTSPlayerController || !RTSPlayerController->IsPlacementModeEnabled()) return;
+	RTSPlayerController->PlaceCancel();
 }
 
 

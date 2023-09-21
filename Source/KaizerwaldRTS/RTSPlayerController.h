@@ -8,9 +8,7 @@
 
 class UInputMappingContext;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSelectionUpdatedDelegate);
-/**
- * 
- */
+
 UCLASS()
 class KAIZERWALDRTS_API ARTSPlayerController : public APlayerController
 {
@@ -37,10 +35,10 @@ protected:
 	//╓────────────────────────────────────────────────────────────────────────────────────────────────────────────────╖
 	//║ ◈◈◈◈◈◈ Placement Methods ◈◈◈◈◈◈				                                                           ║
 	//╙────────────────────────────────────────────────────────────────────────────────────────────────────────────────╜
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	bool bPlacementModeEnabled;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	AActor* PlacementPreviewActor;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Placeable")
@@ -57,6 +55,10 @@ public:
 	UFUNCTION()
 	void HandleSelection(AActor* actorToSelect);
 	void HandleSelection(TArray<AActor*> actorsToSelect);
+
+	UFUNCTION()
+	void HandleDeSelection(AActor* actorToDeSelect);
+	void HandleDeSelection(TArray<AActor*> actorsToDeSelect);
 
 	UFUNCTION()
 	FVector GetMousePositionOnTerrain() const;
@@ -79,6 +81,15 @@ public:
 
 	UFUNCTION()
 	void SetInputPlacement(const bool enabled = true) const;
+	
+	UFUNCTION()
+	void SetInputShift(const bool enabled = true) const;
+
+	UFUNCTION()
+	void SetInputAlt(const bool enabled = true) const;
+
+	UFUNCTION()
+	void SetInputCtrl(const bool enabled = true) const;
 
 	UFUNCTION()
 	UDataAsset* GetInputActionsAsset() const { return PlayerActionAsset; }
@@ -105,6 +116,8 @@ protected:
 
 	virtual void SetupInputComponent() override;
 
+	virtual void Tick(float DeltaSeconds) override;
+
 	UFUNCTION()
 	bool ActorSelected(AActor* actorToCheck) const;
 
@@ -118,11 +131,22 @@ protected:
 	void ServerDeSelect(AActor* actorToDeSelect);
 
 	UFUNCTION(Server, Reliable)
+	void ServerDeSelectGroup(const TArray<AActor*>& actorsToDeSelect);
+
+	UFUNCTION(Server, Reliable)
 	void ServerClearSelected();
 
 	UFUNCTION()
 	void OnRepSelected();
+	
+	/**Placement **/
 
+	UFUNCTION()
+	void UpdatePlacement() const;
+	
 	UFUNCTION(Server, Reliable)
 	void ServerPlace(AActor* placementPreviewToSpawn);
+
+	UFUNCTION(Client, Reliable)
+	void EndPlacement();
 };

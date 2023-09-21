@@ -144,7 +144,7 @@ void ASelectionBox::Start(FVector position, const FRotator rotation)
 	IsEnabled = true;
 }
 
-void ASelectionBox::End()
+void ASelectionBox::End(const bool bSelect, const bool bAddOnly)
 {
 	if(!PlayerController) return;
 	IsEnabled = false;
@@ -153,11 +153,15 @@ void ASelectionBox::End()
 
 	if(CenterInBox.Num() == 0)
 	{
-		PlayerController->HandleSelection(nullptr);
+		if(!bAddOnly)
+		{
+			PlayerController->HandleSelection(nullptr);
+		}
 	}
 	else
 	{
-		PlayerController->HandleSelection(CenterInBox);
+		bSelect ? PlayerController->HandleSelection(CenterInBox) : PlayerController->HandleDeSelection(CenterInBox);
+		//PlayerController->HandleSelection(CenterInBox);
 	}
 
 	ActorsInBox.Empty();
